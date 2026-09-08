@@ -3,6 +3,7 @@ package ui
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/lxn/walk"
@@ -10,7 +11,8 @@ import (
 	"github.com/redoeyeo/m3u-editor/domain"
 )
 
-// Model для таблицы (остается внутри UI, так как привязана к API walk)
+// ── Model ──────────────────────────────────────────
+
 type TrackModel struct {
 	walk.TableModelBase
 	playlist *domain.Playlist
@@ -28,20 +30,98 @@ func (m *TrackModel) Value(row, col int) interface{} {
 	case 0:
 		return m.playlist.Items[row].Name
 	case 1:
-		return m.playlist.Items[row].URL
+		return m.playlist.Items[row].Path
 	}
 	return ""
 }
+
+// ── Context ───────────────────────────────────────
+
+type uiCtx struct {
+	playlist  *domain.Playlist
+	model     *TrackModel
+	tableView *walk.TableView
+	preview   *walk.TextEdit
+}
+
+func (c *uiCtx) refresh() {
+	c.model.PublishRowsReset()
+	text := strings.ReplaceAll(c.playlist.ToM3U(), "\n", "\r\n")
+	c.preview.SetText(text)
+}
+
+// ── Обработчики кнопок ─────────────────────────────
+
+func (c *uiCtx) addFromFiles() {
+	dlg := walk.FileDialog{
+		Filter: "Audio files (*.mp3;*.wav;*.flac;*.m4a)|*.mp3;*.wav;*.flac;*.m4a|All files (*.*)|*.*",
+	}
+
+	// В walk для множественного выбора НЕ нужно ставить флаг,
+	// достаточно использовать FilePaths вместо FilePath.
+	if ok, _ := dlg.ShowOpen(nil); !ok {
+		return
+	}
+
+	// Проходимся по ВСЕМ выбранным файлам
+	for _, path := range dlg.FilePaths {
+		name := filepath.Base(path)
+		c.playlist.Add(name, path)
+	}
+	c.refresh()
+}
+
+func (c *uiCtx) removeTrack() {
+	i := c.tableView.CurrentIndex()
+	if i < 0 {
+		walk.MsgBox(nil, "Ошибка", "Выберите трек для удаления", walk.MsgBoxIconError)
+		return
+	}
+	c.playlist.Remove(i)
+	c.refresh()
+}
+
+func (c *uiCtx) openFile() {
+	dlg := walk.FileDialog{
+		Filter: "M3U Playlist (*.m3u)|*.m3u|All files (*.*)|*.*",
+	}
+	if ok, _ := dlg.ShowOpen(nil); !ok {
+		return
+	}
+	data, err := os.ReadFile(dlg.FilePath)
+	if err != nil {
+		walk.MsgBox(nil, "Ошибка чтения", err.Error(), walk.MsgBoxIconError)
+		return
+	}
+	*c.playlist = *domain.ParseM3U(string(data))
+	c.refresh()
+}
+
+func (c *uiCtx) saveFile() {
+	dlg := walk.FileDialog{
+		Filter: "M3U Playlist (*.m3u)|*.m3u",
+	}
+	if ok, _ := dlg.ShowSave(nil); !ok {
+		return
+	}
+	path := dlg.FilePath
+	if !strings.HasSuffix(path, ".m3u") {
+		path += ".m3u"
+	}
+	err := os.WriteFile(path, []byte(c.playlist.ToM3U()), 0644)
+	if err != nil {
+		walk.MsgBox(nil, "Ошибка записи", err.Error(), walk.MsgBoxIconError)
+		return
+	}
+	walk.MsgBox(nil, "Готово", "Файл сохранён:\n"+path, walk.MsgBoxIconInformation)
+}
+
+// ── Главное окно ────────────────────────────────────
+
 func Run(playlist *domain.Playlist) error {
-	model := &TrackModel{playlist: playlist}
-
-	var nameEdit, urlEdit *walk.LineEdit
-	var tableView *walk.TableView
-	var previewEdit *walk.TextEdit
-
-	refresh := func() {
-		model.PublishRowsReset()
-		previewEdit.SetText(playlist.ToM3U())
+	ctx := &uiCtx{
+		playlist: playlist,
+		model:    &TrackModel{playlist: playlist},
 	}
 
 	_, err := MainWindow{
@@ -49,137 +129,44 @@ func Run(playlist *domain.Playlist) error {
 		MinSize: Size{700, 500},
 		Layout:  VBox{},
 		Children: []Widget{
-			Composite{
-				Layout: Grid{Columns: 2},
-				Children: []Widget{
-					Label{Text: "Название:"},
-					LineEdit{AssignTo: &nameEdit},
-					Label{Text: "URL:"},
-					LineEdit{AssignTo: &urlEdit},
-				},
-			},
+			// Кнопки управления
 			Composite{
 				Layout: HBox{},
 				Children: []Widget{
-					PushButton{
-						Text: "Добавить",
-						OnClicked: func() {
-							url := urlEdit.Text()
-							if url == "" {
-								walk.MsgBox(nil, "Ошибка", "URL пустой", walk.MsgBoxIconError)
-								return
-							}
-							name := nameEdit.Text()
-							if name == "" {
-								name = url
-							}
-							playlist.Add(name, url)
-							nameEdit.SetText("")
-							urlEdit.SetText("")
-							refresh()
-						},
-					},
-					PushButton{
-						Text: "Удалить",
-						OnClicked: func() {
-							i := tableView.CurrentIndex()
-							if i < 0 {
-								walk.MsgBox(nil, "Ошибка", "Выберите трек", walk.MsgBoxIconError)
-								return
-							}
-							playlist.Remove(i)
-							refresh()
-						},
-					},
-					PushButton{
-						Text: "Вверх",
-						OnClicked: func() {
-							i := tableView.CurrentIndex()
-							if i > 0 {
-								playlist.Move(i, i-1)
-								refresh()
-							}
-						},
-					},
-					PushButton{
-						Text: "Вниз",
-						OnClicked: func() {
-							i := tableView.CurrentIndex()
-							if i >= 0 && i < len(playlist.Items)-1 {
-								playlist.Move(i, i+1)
-								refresh()
-							}
-						},
-					},
+					PushButton{Text: "Добавить файлы", OnClicked: ctx.addFromFiles},
+					PushButton{Text: "Удалить выбранный", OnClicked: ctx.removeTrack},
 				},
 			},
+
+			// Таблица + предпросмотр
 			HSplitter{
 				Children: []Widget{
 					TableView{
-						AssignTo: &tableView,
-						Model:    model,
+						AssignTo: &ctx.tableView,
+						Model:    ctx.model,
 						Columns: []TableViewColumn{
-							{Title: "Название", Width: 250},
-							{Title: "URL", Width: 300},
+							{Title: "Название", Width: 300},
+							{Title: "Путь", Width: 400},
 						},
 					},
 					TextEdit{
-						AssignTo: &previewEdit,
+						AssignTo: &ctx.preview,
 						ReadOnly: true,
 						Text:     "#EXTM3U ...",
 					},
 				},
 			},
+
+			// Открыть / Сохранить
 			Composite{
 				Layout: HBox{},
 				Children: []Widget{
-					PushButton{
-						Text: "Открыть .m3u",
-						OnClicked: func() {
-							dlg := walk.FileDialog{
-								Filter: "M3U Playlist (*.m3u)|*.m3u|All files (*.*)|*.*",
-							}
-							if ok, _ := dlg.ShowOpen(nil); !ok {
-								return
-							}
-							data, err := os.ReadFile(dlg.FilePath)
-							if err != nil {
-								walk.MsgBox(nil, "Ошибка", err.Error(), walk.MsgBoxIconError)
-								return
-							}
-							*playlist = *domain.ParseM3U(string(data))
-							refresh()
-						},
-					},
-					PushButton{
-						Text: "Сохранить .m3u",
-						OnClicked: func() {
-							dlg := walk.FileDialog{
-								Filter: "M3U Playlist (*.m3u)|*.m3u",
-							}
-							if ok, _ := dlg.ShowSave(nil); !ok {
-								return
-							}
-							path := dlg.FilePath
-							if !strings.HasSuffix(path, ".m3u") {
-								path += ".m3u"
-							}
-							err := os.WriteFile(path, []byte(playlist.ToM3U()), 0644)
-							if err != nil {
-								walk.MsgBox(nil, "Ошибка", err.Error(), walk.MsgBoxIconError)
-								return
-							}
-							walk.MsgBox(nil, "Готово", "Файл сохранён:\n"+path, walk.MsgBoxIconInformation)
-						},
-					},
+					PushButton{Text: "Открыть .m3u", OnClicked: ctx.openFile},
+					PushButton{Text: "Сохранить .m3u", OnClicked: ctx.saveFile},
 				},
 			},
 		},
 	}.Run()
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }

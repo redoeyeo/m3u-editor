@@ -68,9 +68,6 @@ func (p *Playlist) ToM3U() string {
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n")
 	for _, t := range p.Items {
-		b.WriteString("#EXTINF:-1,")
-		b.WriteString(t.Name)
-		b.WriteString("\n")
 		b.WriteString(t.Path) // Выводим Path
 		b.WriteString("\n")
 	}

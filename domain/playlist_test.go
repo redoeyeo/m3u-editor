@@ -112,7 +112,7 @@ func TestPlaylistToM3U(t *testing.T) {
 
 	result := p.ToM3U()
 
-	expected := "#EXTM3U\n#EXTINF:-1,Мой трек\nC:\\MyMusic\\song.mp3\n"
+	expected := "#EXTM3U\nC:\\MyMusic\\song.mp3\n"
 	if result != expected {
 		t.Errorf("ToM3U вернул неожиданный результат:\n%s\nОжидалось:\n%s", result, expected)
 	}
