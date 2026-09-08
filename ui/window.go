@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,10 +39,11 @@ func (m *TrackModel) Value(row, col int) interface{} {
 // ── Context ───────────────────────────────────────
 
 type uiCtx struct {
-	playlist  *domain.Playlist
-	model     *TrackModel
-	tableView *walk.TableView
-	preview   *walk.TextEdit
+	playlist        *domain.Playlist
+	model           *TrackModel
+	tableView       *walk.TableView
+	preview         *walk.TextEdit
+	currentFilePath string // ← новое
 }
 
 func (c *uiCtx) refresh() {
@@ -59,11 +61,14 @@ func (c *uiCtx) addFromFiles() {
 
 	// В walk для множественного выбора НЕ нужно ставить флаг,
 	// достаточно использовать FilePaths вместо FilePath.
-	if ok, _ := dlg.ShowOpen(nil); !ok {
+	if ok, err := dlg.ShowOpen(nil); !ok {
+		fmt.Println(ok)
+		fmt.Println(err)
 		return
 	}
 
 	// Проходимся по ВСЕМ выбранным файлам
+	fmt.Println("check")
 	for _, path := range dlg.FilePaths {
 		name := filepath.Base(path)
 		c.playlist.Add(name, path)
@@ -93,6 +98,7 @@ func (c *uiCtx) openFile() {
 		walk.MsgBox(nil, "Ошибка чтения", err.Error(), walk.MsgBoxIconError)
 		return
 	}
+	c.currentFilePath = dlg.FilePath // ← новое
 	*c.playlist = *domain.ParseM3U(string(data))
 	c.refresh()
 }
@@ -108,12 +114,26 @@ func (c *uiCtx) saveFile() {
 	if !strings.HasSuffix(path, ".m3u") {
 		path += ".m3u"
 	}
+	c.currentFilePath = path // ← новое
 	err := os.WriteFile(path, []byte(c.playlist.ToM3U()), 0644)
 	if err != nil {
 		walk.MsgBox(nil, "Ошибка записи", err.Error(), walk.MsgBoxIconError)
 		return
 	}
 	walk.MsgBox(nil, "Готово", "Файл сохранён:\n"+path, walk.MsgBoxIconInformation)
+}
+
+func (c *uiCtx) refreshFile() {
+	if c.currentFilePath == "" {
+		walk.MsgBox(nil, "Ошибка", "Сначала откройте или сохраните файл", walk.MsgBoxIconError)
+		return
+	}
+	err := os.WriteFile(c.currentFilePath, []byte(c.playlist.ToM3U()), 0644)
+	if err != nil {
+		walk.MsgBox(nil, "Ошибка записи", err.Error(), walk.MsgBoxIconError)
+		return
+	}
+	walk.MsgBox(nil, "Готово", "Файл обновлён:\n"+c.currentFilePath, walk.MsgBoxIconInformation)
 }
 
 // ── Главное окно ────────────────────────────────────
@@ -135,6 +155,7 @@ func Run(playlist *domain.Playlist) error {
 				Children: []Widget{
 					PushButton{Text: "Добавить файлы", OnClicked: ctx.addFromFiles},
 					PushButton{Text: "Удалить выбранный", OnClicked: ctx.removeTrack},
+					PushButton{Text: "Обновить файл", OnClicked: ctx.refreshFile}, // ← новое
 				},
 			},
 
