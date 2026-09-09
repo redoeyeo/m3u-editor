@@ -164,7 +164,8 @@ func Run(playlist *domain.Playlist) error {
 				Children: []Widget{
 					PushButton{Text: "Добавить файлы", OnClicked: ctx.addFromFiles},
 					PushButton{Text: "Удалить выбранный", OnClicked: ctx.removeTrack},
-					PushButton{Text: "Обновить файл", OnClicked: ctx.refreshFile}, // ← новое
+					PushButton{Text: "Обновить файл", OnClicked: ctx.refreshFile},
+					PushButton{Text: "Добавить через папку", OnClicked: ctx.addFromFolder},
 				},
 			},
 
