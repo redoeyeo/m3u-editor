@@ -49,31 +49,40 @@ type uiCtx struct {
 func (c *uiCtx) refresh() {
 	c.model.PublishRowsReset()
 	text := strings.ReplaceAll(c.playlist.ToM3U(), "\n", "\r\n")
+	text = strings.ReplaceAll(text, "\x00", "")
 	c.preview.SetText(text)
 }
 
 // ── Обработчики кнопок ─────────────────────────────
-
 func (c *uiCtx) addFromFiles() {
 	dlg := walk.FileDialog{
-		Filter: "Audio files (*.mp3;*.wav;*.flac;*.m4a)|*.mp3;*.wav;*.flac;*.m4a|All files (*.*)|*.*",
+		// Фильтр оставляем в формате "Описание|расширения"
+		Filter: "Audio files|*.mp3;*.wav;*.flac;*.m4a|All files|*.*",
 	}
 
-	// В walk для множественного выбора НЕ нужно ставить флаг,
-	// достаточно использовать FilePaths вместо FilePath.
-	if ok, err := dlg.ShowOpen(nil); !ok {
-		fmt.Println(ok)
-		fmt.Println(err)
+	// ВАЖНО: Используем метод ShowOpenMultiple вместо ShowOpen
+	// Он специально создан для выбора нескольких файлов
+	if ok, err := dlg.ShowOpenMultiple(nil); !ok {
+		if err != nil {
+			walk.MsgBox(nil, "Ошибка", err.Error(), walk.MsgBoxIconError)
+		}
 		return
 	}
 
-	// Проходимся по ВСЕМ выбранным файлам
-	fmt.Println("check")
+	addedCount := 0
 	for _, path := range dlg.FilePaths {
 		name := filepath.Base(path)
 		c.playlist.Add(name, path)
+		addedCount++
 	}
+
+	if addedCount == 0 {
+		walk.MsgBox(nil, "Инфо", "Файлы не выбраны", walk.MsgBoxIconInformation)
+		return
+	}
+
 	c.refresh()
+	walk.MsgBox(nil, "Готово", fmt.Sprintf("Добавлено файлов: %d", addedCount), walk.MsgBoxIconInformation)
 }
 
 func (c *uiCtx) removeTrack() {

@@ -2,6 +2,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/redoeyeo/m3u-editor/domain"
 	"github.com/redoeyeo/m3u-editor/ui"
 )
@@ -14,4 +16,5 @@ func main() {
 	if err := ui.Run(pl); err != nil {
 		panic(err)
 	}
+	fmt.Println("launching")
 }
