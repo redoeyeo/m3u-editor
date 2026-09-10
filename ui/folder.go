@@ -70,6 +70,14 @@ func levenshtein(s1, s2 string) int {
 	return d[m][n]
 }
 
+func (c *uiCtx) addTrack(name, path string) {
+	if c.currentFilePath != "" {
+		c.playlist.RelativeAdd(name, path, c.currentFilePath)
+	} else {
+		c.playlist.Add(name, path)
+	}
+}
+
 func fuzzyMatch(query, target string) bool {
 	query = strings.ToLower(strings.TrimSpace(query))
 	target = strings.ToLower(target)
@@ -97,7 +105,6 @@ func (c *uiCtx) addFromFolder() {
 		return
 	}
 	folder := dlg.FilePath
-
 	audioExts := map[string]bool{".mp3": true, ".wav": true, ".flac": true, ".m4a": true}
 	var found []FoundTrack
 	filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
@@ -153,6 +160,8 @@ func (c *uiCtx) showSearchDialog(found []FoundTrack) {
 								model.items = filtered
 							}
 							model.PublishRowsReset()
+							resultTable.SetSuspended(true)
+							resultTable.SetSuspended(false)
 						},
 					},
 				},
@@ -179,7 +188,8 @@ func (c *uiCtx) showSearchDialog(found []FoundTrack) {
 							}
 							for _, i := range indexes {
 								if i >= 0 && i < len(model.items) {
-									c.playlist.Add(model.items[i].Name, model.items[i].Path)
+									c.addTrack(model.items[i].Name, model.items[i].Path)
+
 								}
 							}
 							c.refresh()
@@ -190,7 +200,7 @@ func (c *uiCtx) showSearchDialog(found []FoundTrack) {
 						Text: "Добавить все",
 						OnClicked: func() {
 							for _, t := range model.items {
-								c.playlist.Add(t.Name, t.Path)
+								c.addTrack(t.Name, t.Path)
 							}
 							c.refresh()
 							searchEdit.SetText("")

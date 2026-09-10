@@ -72,7 +72,7 @@ func (c *uiCtx) addFromFiles() {
 	addedCount := 0
 	for _, path := range dlg.FilePaths {
 		name := filepath.Base(path)
-		c.playlist.Add(name, path)
+		c.addTrack(name, path)
 		addedCount++
 	}
 
@@ -92,9 +92,13 @@ func (c *uiCtx) removeTrack() {
 		return
 	}
 	c.playlist.Remove(i)
-	c.refresh()
-}
+	c.tableView.SetCurrentIndex(-1)
+	c.model.PublishRowsReset()
 
+	// Принудительная перерисовка
+	c.tableView.SetSuspended(true)
+	c.tableView.SetSuspended(false)
+}
 func (c *uiCtx) openFile() {
 	dlg := walk.FileDialog{
 		Filter: "M3U Playlist (*.m3u)|*.m3u|All files (*.*)|*.*",
@@ -178,6 +182,11 @@ func Run(playlist *domain.Playlist) error {
 						Columns: []TableViewColumn{
 							{Title: "Название", Width: 300},
 							{Title: "Путь", Width: 400},
+						},
+						OnKeyDown: func(key walk.Key) {
+							if key == walk.KeyDelete {
+								ctx.removeTrack()
+							}
 						},
 					},
 					TextEdit{

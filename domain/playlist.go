@@ -73,3 +73,20 @@ func (p *Playlist) ToM3U() string {
 	}
 	return b.String()
 }
+
+// RelativeAdd добавляет трек с относительным путем от указанного плейлиста
+func (p *Playlist) RelativeAdd(name, path, playlistPath string) {
+	// Получаем относительный путь
+	relPath, err := filepath.Rel(filepath.Dir(playlistPath), path)
+	if err != nil {
+		// Если не удалось получить относительный путь - используем абсолютный
+		relPath = path
+	}
+	relPath = strings.ReplaceAll(relPath, "\\", "/")
+
+	// Добавляем трек в плейлист
+	p.Items = append(p.Items, Track{
+		Name: name,
+		Path: relPath,
+	})
+}

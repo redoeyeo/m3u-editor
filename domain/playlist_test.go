@@ -139,3 +139,34 @@ func TestParseM3UFileNameFromPath(t *testing.T) {
 		t.Errorf("Имя 2: '%s', ожидалось '%s'", p.Items[1].Name, expected2)
 	}
 }
+
+func TestPlaylistRelativeAdd(t *testing.T) {
+	p := &Playlist{}
+
+	// Плейлист лежит в C:\Music\playlists\my.m3u
+	playlistPath := `C:\Music\playlists\my.m3u`
+
+	// Трек в той же папке, что плейлист
+	p.RelativeAdd("Трек рядом", `C:\Music\playlists\song1.mp3`, playlistPath)
+	if p.Items[0].Path != "song1.mp3" {
+		t.Errorf("Трек рядом: ожидался 'song1.mp3', получен '%s'", p.Items[0].Path)
+	}
+
+	// Трек в подпапке
+	p.RelativeAdd("Трек в подпапке", `C:\Music\playlists\album\song2.mp3`, playlistPath)
+	if p.Items[1].Path != "album/song2.mp3" {
+		t.Errorf("Подпапка: ожидался 'album/song2.mp3', получен '%s'", p.Items[1].Path)
+	}
+
+	// Трек в родительской директории
+	p.RelativeAdd("Трек выше", `C:\Music\song3.mp3`, playlistPath)
+	if p.Items[2].Path != "../song3.mp3" {
+		t.Errorf("Родитель: ожидался '../song3.mp3', получен '%s'", p.Items[2].Path)
+	}
+
+	// Трек совсем в другом месте — fallback на абсолютный путь
+	p.RelativeAdd("Трек далеко", `D:\Other\song4.mp3`, playlistPath)
+	if p.Items[3].Path != `D:/Other/song4.mp3` {
+		t.Errorf("Другой диск: ожидался абсолютный путь, получен '%s'", p.Items[3].Path)
+	}
+}
